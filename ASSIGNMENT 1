@@ -1,1 +1,117 @@
+# --- RATE CARD CONFIGURATION ---
+# Replace the "OTHER_MONTHS" values with the exact base rate and fat step from Task 1
+RATE_CARD = {
+    "APR_JUN": {
+        "base_rate": 32.00,
+        "fat_step_value": 0.45,
+        "base_fat": 3.50,  # Update if your original problem specifies a different base fat %
+        "base_snf": 8.50,  # Update if your original problem specifies a different base SNF %
+        "snf_step_value": 0.30,  # Update if your original problem specifies an SNF step value
+    },
+    "OTHER": {
+        "base_rate": 30.00,  # <-- Replace with original Task 1 base rate
+        "fat_step_value": 0.40,  # <-- Replace with original Task 1 fat step
+        "base_fat": 3.50,
+        "base_snf": 8.50,
+        "snf_step_value": 0.30,
+    },
+}
+
+BONUS_VOLUME_THRESHOLD = 500.0  # Litres in ten days
+BONUS_RATE_PER_LITRE = 0.50  # Rs 0.50 per litre
+
+
+def get_rate_card(season: str) -> dict:
+    """Selects the appropriate rate card based on the season."""
+    season_key = season.strip().upper()
+    if season_key in ["APRIL", "MAY", "JUNE", "APR_JUN"]:
+        return RATE_CARD["APR_JUN"]
+    return RATE_CARD["OTHER"]
+
+
+def calculate_step_units(reading: float, base: float) -> int:
+    """Calculates discrete 0.1 step increments from two-decimal analyzer readings.
+
+    Using round() prevents floating-point precision errors (e.g., 4.12 - 3.50 =
+    0.6200000000000001).
+    """
+    diff = round(reading - base, 2)
+    # Using int(diff * 10) floors partial 0.01 steps; use round(diff * 10) if nearest step is required
+    return int(round(diff * 10, 2))
+
+
+def calculate_rate_per_litre(fat: float, snf: float, season: str) -> float:
+    """Calculates the milk rate per litre using two-decimal readings and seasonal rates."""
+    rates = get_rate_card(season)
+
+    fat_steps = calculate_step_units(fat, rates["base_fat"])
+    snf_steps = calculate_step_units(snf, rates["base_snf"])
+
+    fat_adjustment = fat_steps * rates["fat_step_value"]
+    snf_adjustment = snf_steps * rates["snf_step_value"]
+
+    rate_per_litre = rates["base_rate"] + fat_adjustment + snf_adjustment
+    return round(rate_per_litre, 2)
+
+
+def calculate_volume_bonus(total_litres_10_days: float) -> float:
+    """Separate bonus function for farmers supplying more than 500 litres in 10 days."""
+    if total_litres_10_days > BONUS_VOLUME_THRESHOLD:
+        return round(total_litres_10_days * BONUS_RATE_PER_LITRE, 2)
+    return 0.0
+
+
+def calculate_total_payout(
+    fat: float, snf: float, litres: float, season: str
+) -> dict:
+    """Computes the complete payout breakdown for a 10-day cycle."""
+    rate = calculate_rate_per_litre(fat, snf, season)
+    base_payout = round(rate * litres, 2)
+    bonus = calculate_volume_bonus(litres)
+    total_payout = round(base_payout + bonus, 2)
+
+    return {
+        "season": season,
+        "fat": fat,
+        "snf": snf,
+        "litres": litres,
+        "rate_per_litre": rate,
+        "base_payout": base_payout,
+        "bonus": bonus,
+        "total_payout": total_payout,
+    }
+
+
+# --- EVIDENCE-BASED DEFENCE TEST SUITE (Task 12 - Part D) ---
+if __name__ == "__main__":
+    test_cases = [
+        # (fat, snf, litres, season, description)
+        (4.25, 8.65, 450.0, "April", "Apr-Jun season, below 500L bonus limit"),
+        (
+            4.25,
+            8.65,
+            520.0,
+            "May",
+            "Apr-Jun season, above 500L bonus limit (+Rs 0.50/L)",
+        ),
+        (
+            4.25,
+            8.65,
+            500.0,
+            "October",
+            "Other season, exact 500L boundary (no bonus)",
+        ),
+        (
+            4.25,
+            8.65,
+            500.5,
+            "December",
+            "Other season, just above 500L boundary",
+        ),
+    ]
+
+    for fat, snf, litres, season, desc in test_cases:
+        result = calculate_total_payout(fat, snf, litres, season)
+        print(f"Test: {desc}")
+        print(f"  Result -> {result}\n")
 
